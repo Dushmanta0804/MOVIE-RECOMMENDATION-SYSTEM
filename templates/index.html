@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>CineMatch - Movie Recommendations</title>
+<style>
+/* --- condensed styling (keeps your look) --- */
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh;padding:20px;color:#222}
+.container{max-width:1400px;margin:0 auto}
+header{text-align:center;color:white;margin-bottom:30px}
+header h1{font-size:2.6rem;margin-bottom:6px;text-shadow:2px 2px 4px rgba(0,0,0,.25)}
+header p{opacity:.95}
+.search-section{background:rgba(255,255,255,.98);padding:22px;border-radius:14px;margin-bottom:22px;box-shadow:0 8px 30px rgba(0,0,0,.18)}
+.search-bar{display:flex;gap:12px;flex-wrap:wrap}
+.search-input{flex:1;min-width:220px;padding:12px 16px;border:2px solid #667eea;border-radius:10px;font-size:16px}
+.btn{padding:12px 18px;border-radius:10px;border:none;cursor:pointer;font-weight:600}
+.btn-primary{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff}
+.filter-section{margin-top:12px;display:flex;gap:10px;flex-wrap:wrap}
+.filter-btn{padding:8px 14px;border-radius:20px;border:2px solid #667eea;background:#fff;cursor:pointer}
+.filter-btn.active{background:linear-gradient(135deg,#667eea,#764ba2);color:white;border-color:#667eea}
+.movies-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:22px;margin-top:20px}
+.movie-card{background:white;border-radius:12px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.18);cursor:pointer;position:relative}
+.movie-image{width:100%;height:360px;object-fit:cover;display:block}
+.movie-info{padding:14px}
+.movie-title{font-weight:700;color:#333;font-size:1.1rem;margin-bottom:6px}
+.movie-meta{display:flex;gap:10px;color:#777;font-size:.9rem;margin-bottom:8px}
+.movie-genre{display:inline-block;padding:6px 12px;border-radius:18px;background:linear-gradient(135deg,#667eea,#764ba2);color:white;font-size:.8rem}
+.movie-description{color:#666;font-size:.95rem;margin-top:6px;line-height:1.4}
+.favorite-btn{position:absolute;top:12px;right:12px;background:white;border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;border:none;box-shadow:0 6px 20px rgba(0,0,0,.12);cursor:pointer}
+.favorite-btn.active{background:#ef4444}
+.favorite-btn svg{stroke:#ef4444;fill:none}
+.favorite-btn.active svg{stroke:#fff;fill:#fff}
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:1200;align-items:center;justify-content:center;padding:20px}
+.modal.active{display:flex}
+.modal-content{background:#fff;border-radius:12px;width:min(900px,98%);max-height:90vh;overflow:auto}
+.modal-image{width:100%;height:420px;object-fit:cover;border-top-left-radius:12px;border-top-right-radius:12px}
+.modal-body{padding:18px}
+.close-btn{float:right;font-size:28px;color:#666;cursor:pointer}
+.no-results{text-align:center;color:white;font-size:1.25rem;margin-top:30px}
+@media (max-width:768px){.movie-image{height:260px}.modal-image{height:260px}}
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>🎬 CineMatch</h1>
+    <p>Your personalized movie companion — explore, filter, then search to get recommendations.</p>
+  </header>
+
+  <!-- SEARCH FORM (posts to Flask /landing) -->
+  <div class="search-section">
+    <form class="search-bar" action="/landing" method="POST" id="flaskSearchForm">
+      <input class="search-input" name="movie_name" id="searchInput" placeholder="Type a movie name and press Recommend (or use the local filters below)" required>
+      <button class="btn btn-primary" type="submit">Recommend →</button>
+    </form>
+    <div class="filter-section" id="filterSection">
+      <button class="filter-btn active" data-genre="all" onclick="filterByGenre('all', this)">All</button>
+      <button class="filter-btn" data-genre="action" onclick="filterByGenre('action', this)">Action</button>
+      <button class="filter-btn" data-genre="comedy" onclick="filterByGenre('comedy', this)">Comedy</button>
+      <button class="filter-btn" data-genre="drama" onclick="filterByGenre('drama', this)">Drama</button>
+      <button class="filter-btn" data-genre="sci-fi" onclick="filterByGenre('sci-fi', this)">Sci-Fi</button>
+      <button class="filter-btn" data-genre="horror" onclick="filterByGenre('horror', this)">Horror</button>
+      <button class="filter-btn" data-genre="romance" onclick="filterByGenre('romance', this)">Romance</button>
+      <button class="filter-btn" data-genre="thriller" onclick="filterByGenre('thriller', this)">Thriller</button>
+    </div>
+  </div>
+
+  <div id="moviesGrid" class="movies-grid"></div>
+  <div id="noResults" class="no-results" style="display:none">No movies found</div>
+</div>
+
+<!-- Modal -->
+<div id="movieModal" class="modal" onclick="if(event.target.id==='movieModal') closeModal()">
+  <div class="modal-content">
+    <div class="modal-body" id="modalContent">
+      <!-- injected -->
+    </div>
+  </div>
+</div>
+
+<script>
+/* ======= Demo movies array (local UI only) ========
+   You can replace or extend these objects.
+   Fields used: id, title, genre, rating (UI only), year, duration, image, description
+*/
+const movies = [
+  { id:1, title:'Cosmic Drift', genre:'sci-fi', rating:4.5, year:2024, duration:'142 min',
+    image:'https://images.unsplash.com/photo-1440404653325-ab127d49abc1?w=1000&q=80',
+    description:'A mind-bending journey through space and time where a team of astronauts discovers a mysterious signal from deep space.' },
+
+  { id:2, title:'Shadow Protocol', genre:'thriller', rating:4.2, year:2023, duration:'128 min',
+    image:'https://images.unsplash.com/photo-1485846234645-a62644f84728?w=1000&q=80',
+    description:'An elite agent races against time to stop a global cyber threat that could bring down governments worldwide.' },
+
+  { id:3, title:'Laugh Riot', genre:'comedy', rating:4.0, year:2024, duration:'105 min',
+    image:'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=1000&q=80',
+    description:'A hilarious adventure following a group of friends on a chaotic road trip across the country.' },
+
+  { id:4, title:'Hearts Aligned', genre:'romance', rating:4.3, year:2024, duration:'118 min',
+    image:'https://images.unsplash.com/photo-1516796181074-bf453fbfa3e6?w=1000&q=80',
+    description:'Two strangers meet by chance and discover that sometimes love finds you when you least expect it.' },
+
+  { id:5, title:'The Last Stand', genre:'action', rating:4.6, year:2023, duration:'135 min',
+    image:'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=1000&q=80',
+    description:'A former soldier must protect a small town from a dangerous criminal organization in this explosive action thriller.' },
+
+  { id:6, title:'Midnight Whispers', genre:'horror', rating:4.1, year:2024, duration:'98 min',
+    image:'https://images.unsplash.com/photo-1509281373149-e957c6296406?w=1000&q=80',
+    description:'A family moves into an old mansion and discovers dark secrets that should have remained buried.' },
+
+  { id:7, title:'The Silent Truth', genre:'drama', rating:4.7, year:2023, duration:'152 min',
+    image:'https://images.unsplash.com/photo-1478720568477-152d9b164e26?w=1000&q=80',
+    description:'A powerful story about justice, redemption, and the price of standing up for what is right.' },
+
+  { id:8, title:'Velocity', genre:'action', rating:4.4, year:2024, duration:'122 min',
+    image:'https://images.unsplash.com/photo-1524985069026-dd778a71c7b4?w=1000&q=80',
+    description:'High-octane street racing meets international espionage in this adrenaline-pumping action film.' },
+
+  { id:9, title:'Beyond Reality', genre:'sci-fi', rating:4.5, year:2024, duration:'145 min',
+    image:'https://images.unsplash.com/photo-1533613220915-609f661a6fe1?w=1000&q=80',
+    description:'In a world where virtual reality is indistinguishable from real life, one programmer discovers a shocking truth.' },
+
+  { id:10, title:'Summer Days', genre:'comedy', rating:3.9, year:2023, duration:'95 min',
+    image:'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=1000&q=80',
+    description:'A lighthearted comedy about finding yourself during one unforgettable summer vacation.' },
+
+  { id:11, title:'Dark Secrets', genre:'thriller', rating:4.3, year:2024, duration:'115 min',
+    image:'https://images.unsplash.com/photo-1594908900066-3f47337549d8?w=1000&q=80',
+    description:'A detective investigates a series of mysterious disappearances that lead to a conspiracy larger than anyone imagined.' },
+
+  { id:12, title:'Love in Paris', genre:'romance', rating:4.2, year:2023, duration:'108 min',
+    image:'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=1000&q=80',
+    description:'A beautiful love story set against the backdrop of the most romantic city in the world.' }
+];
+
+// state
+let currentGenre = 'all';
+let favorites = JSON.parse(localStorage.getItem('cine_favs') || '[]');
+
+// Render helpers
+function renderMovies(moviesToRender) {
+  const grid = document.getElementById('moviesGrid');
+  const noResults = document.getElementById('noResults');
+
+  if (!moviesToRender || moviesToRender.length === 0) {
+    grid.style.display = 'none';
+    noResults.style.display = 'block';
+    return;
+  }
+
+  grid.style.display = 'grid';
+  noResults.style.display = 'none';
+
+  grid.innerHTML = moviesToRender.map(movie => `
+    <div class="movie-card" data-id="${movie.id}">
+      <button class="favorite-btn ${favorites.includes(movie.id) ? 'active' : ''}" onclick="toggleFavorite(event, ${movie.id})" title="Toggle favorite">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+        </svg>
+      </button>
+
+      <div onclick="openModal(${movie.id})">
+        <img class="movie-image" src="${movie.image}" alt="${escapeHtml(movie.title)}" />
+        <div class="movie-info">
+          <div class="movie-title">${escapeHtml(movie.title)}</div>
+          <div class="movie-meta">
+            <div>⏱ ${escapeHtml(movie.duration)}</div>
+            <div>📅 ${escapeHtml(String(movie.year))}</div>
+          </div>
+          <div class="movie-genre">${escapeHtml(movie.genre.toUpperCase())}</div>
+          <div class="movie-description">${escapeHtml(movie.description.substring(0,120))}...</div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function escapeHtml(s){
+  return String(s)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#039;');
+}
+
+// filters
+function filterByGenre(genre, el) {
+  currentGenre = genre;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  if(el) el.classList.add('active');
+
+  let filtered = (genre === 'all') ? movies.slice() : movies.filter(m => m.genre === genre);
+  renderMovies(filtered);
+}
+
+// search local grid (press Enter or click local Search button if you add one)
+function searchLocal() {
+  const term = document.getElementById('searchInput').value.trim().toLowerCase();
+  let filtered = movies.slice();
+  if (currentGenre !== 'all') filtered = filtered.filter(m => m.genre === currentGenre);
+  if (term) {
+    filtered = filtered.filter(m => m.title.toLowerCase().includes(term) || m.description.toLowerCase().includes(term));
+  }
+  renderMovies(filtered);
+}
+
+// favorites
+function toggleFavorite(ev, id) {
+  ev.stopPropagation();
+  const i = favorites.indexOf(id);
+  if (i > -1) favorites.splice(i,1); else favorites.push(id);
+  localStorage.setItem('cine_favs', JSON.stringify(favorites));
+  // re-render current view
+  searchLocal();
+}
+function openModal(id) {
+  const m = movies.find(x=>x.id===id);
+  if(!m) return;
+  const modal = document.getElementById('movieModal');
+  const modalContent = document.getElementById('modalContent');
+  modalContent.innerHTML = `
+    <img class="modal-image" src="${m.image}" alt="${escapeHtml(m.title)}"/>
+    <div style="padding:14px 0;">
+      <span class="close-btn" onclick="closeModal()">&times;</span>
+      <h2 style="margin-top:8px;">${escapeHtml(m.title)}</h2>
+      <div style="color:#666;margin:8px 0;">⏱ ${escapeHtml(m.duration)} • 📅 ${escapeHtml(String(m.year))} • ${escapeHtml(m.genre)}</div>
+      <p style="color:#444;line-height:1.6;">${escapeHtml(m.description)}</p>
+      <form action="/landing" method="POST" style="margin-top:12px;">
+        <input type="hidden" name="movie_name" value="${escapeHtml(m.title)}">
+        <button class="btn btn-primary" type="submit" style="width:100%;">Get Recommendations for "${escapeHtml(m.title)}"</button>
+      </form>
+    </div>
+  `;
+  modal.classList.add('active');
+}
+function closeModal(){
+  document.getElementById('movieModal').classList.remove('active');
+}
+document.getElementById('searchInput').addEventListener('keyup', function(e){
+  if(e.key === 'Enter'){
+    searchLocal();
+  }
+});
+renderMovies(movies);
+</script>
+</body>
+</html>

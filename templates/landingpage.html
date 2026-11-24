@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CineMatch — Recommendations</title>
+  <style>
+    body{font-family:Arial,Helvetica,sans-serif;background:#f6f7fb;color:#222;margin:0}
+    .wrap{max-width:1100px;margin:30px auto;padding:20px}
+    header{text-align:center;margin-bottom:18px}
+    header h1{color:#ff0066}
+    .results-header{margin:16px 0;text-align:center}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:18px}
+    .card{background:#fff;border-radius:10px;padding:12px;box-shadow:0 8px 30px rgba(0,0,0,.06)}
+    .card h3{margin:0 0 8px;color:#333}
+    .meta{color:#666;font-size:.9rem;margin-bottom:8px}
+    .genre{display:inline-block;padding:6px 10px;background:#764ba2;color:#fff;border-radius:18px;font-size:.8rem}
+    .overview{color:#444;line-height:1.5;margin-top:8px}
+    .none{text-align:center;color:#666;margin-top:30px}
+    a.back{display:inline-block;margin-top:14px;color:#667eea}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>🎬 CineMatch — Recommendations</h1>
+      {% if query %}
+        <p class="results-header">Recommendations based on: <strong>"{{ query }}"</strong></p>
+      {% else %}
+        <p class="results-header">No query provided — try searching from the homepage</p>
+      {% endif %}
+    </header>
+
+    {% if movies and movies|length > 0 %}
+      <div class="grid">
+        {% for m in movies %}
+        <div class="card">
+          <h3>{{ m.title }}</h3>
+          <div class="meta">📅 {{ m.year }} • ⏱ {{ m.duration }}</div>
+          <div class="genre">{{ m.genre or "N/A" }}</div>
+          <p class="overview">{{ m.overview[:220] }}{% if m.overview|length > 220 %}...{% endif %}</p>
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="none">
+        <p>No recommendations found for "<strong>{{ query }}</strong>".</p>
+        <a class="back" href="/">← Go back to search</a>
+      </div>
+    {% endif %}
+  </div>
+</body>
+</html>
